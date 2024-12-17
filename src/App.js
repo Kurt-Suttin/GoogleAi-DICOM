@@ -6,7 +6,7 @@ const {
 } = require("@google/generative-ai");
 
 // Initialize the Generative AI client
-const apiKey = "AIzaSyCXANtH6-LarSCG-giRw7a734mwSALEoCw"; // Use environment variable in production
+const apiKey = process.env.apiKey; // Use environment variable in production
 const genAI = new GoogleGenerativeAI(apiKey);
 
 // Initialize the model configuration
@@ -15,7 +15,7 @@ const model = genAI.getGenerativeModel({
 });
 
 const generationConfig = {
-  temperature: 1, // Controls randomness in AI responses
+  temperature: 0.2, // Controls creativity in AI responses
   topP: 0.95, // Controls diversity by nucleus sampling
   topK: 40, // Limits the number of highest probability tokens
   maxOutputTokens: 8192, // Max tokens in AI's response
@@ -28,22 +28,32 @@ function App() {
   const [response, setResponse] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [fileContent, setFileContent] = useState("");
+  const [imageContent, setImageContent] = useState(""); // For image content
 
   // Handle file selection and reading
   const handleFileUpload = (event) => {
     const file = event.target.files[0]; // Get the selected file
     if (file) {
       const reader = new FileReader(); // Initialize file reader
-      reader.onload = (e) => {
-        setFileContent(e.target.result); // Set the file content to state
-      };
-      reader.readAsText(file); // Read the file as text
+      if (file.type.startsWith("image/")) {
+        // For image files (jpg, png)
+        reader.onload = (e) => {
+          setImageContent(e.target.result); // Set the image content (base64 string)
+        };
+        reader.readAsDataURL(file); // Read as base64
+      } else {
+        // For text files
+        reader.onload = (e) => {
+          setFileContent(e.target.result); // Set the file content to state
+        };
+        reader.readAsText(file); // Read as text
+      }
     }
   };
 
   // Handle the submission to the AI model
   const handleSubmit = async () => {
-    if (!input && !fileContent) {
+    if (!input && !fileContent && !imageContent) {
       alert("Please provide input or upload a file.");
       return;
     }
@@ -55,8 +65,12 @@ function App() {
         history: [],
       });
 
-      // Combine input text and file content
-      const prompt = `${input}\n\nFile Content:\n${fileContent}`;
+      // Combine input text, file content, and image content
+      let prompt = `${input}\n\nFile Content:\n${fileContent}`;
+      if (imageContent) {
+        // If an image is provided, append it as base64 encoded string
+        prompt += `\n\nImage Content:\n[Image Attached as Base64] ${imageContent}`;
+      }
 
       // Send the combined prompt to the AI
       const result = await chatSession.sendMessage(prompt);
@@ -87,7 +101,7 @@ function App() {
       {/* File input for uploading a file */}
       <input
         type="file"
-        accept=".txt,.md,.json"
+        accept=".txt,.md,.json,image/*" // Accepting images as well
         onChange={handleFileUpload}
         style={{ marginBottom: "20px" }}
       />
