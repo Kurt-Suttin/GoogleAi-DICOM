@@ -6,7 +6,7 @@ const {
 } = require("@google/generative-ai");
 
 // Initialize the Generative AI client
-const apiKey = process.env.apiKey; // Use environment variable in production
+const apiKey = process.env.REACT_APP_API_KEY; // Use environment variable in production
 const genAI = new GoogleGenerativeAI(apiKey);
 
 // Initialize the model configuration
@@ -32,7 +32,7 @@ function App() {
 
   // Handle file selection and reading
   const handleFileUpload = (event) => {
-    const file = event.target.files[0]; // Get the selected file
+    const file = event.target.filesaf[0]; // Get the selected file
     if (file) {
       const reader = new FileReader(); // Initialize file reader
       if (file.type.startsWith("image/")) {
