@@ -1,133 +1,125 @@
 import React, { useState } from "react";
+import { Buffer } from 'buffer';
+import './App.css';
 
 // Import Google Generative AI SDK
-const {
-  GoogleGenerativeAI,
-} = require("@google/generative-ai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // Initialize the Generative AI client
-const apiKey = process.env.REACT_APP_API_KEY; // Use environment variable in production
+const apiKey = process.env.REACT_APP_API_KEY;
 const genAI = new GoogleGenerativeAI(apiKey);
 
-// Initialize the model configuration
-const model = genAI.getGenerativeModel({
-  model: "gemini-2.0-flash-exp",
-});
+// Initialize the model - Note: Using gemini-pro-vision for image processing
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-const generationConfig = {
-  temperature: 0.2, // Controls creativity in AI responses
-  topP: 0.95, // Controls diversity by nucleus sampling
-  topK: 40, // Limits the number of highest probability tokens
-  maxOutputTokens: 8192, // Max tokens in AI's response
-  responseMimeType: "text/plain", // MIME type for the response
-};
 
 function App() {
-  // State variables for input, response, loading status, and file content
   const [input, setInput] = useState("");
   const [response, setResponse] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [fileContent, setFileContent] = useState("");
-  const [imageContent, setImageContent] = useState(""); // For image content
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
 
   // Handle file selection and reading
   const handleFileUpload = (event) => {
-    const file = event.target.filesaf[0]; // Get the selected file
-    if (file) {
-      const reader = new FileReader(); // Initialize file reader
-      if (file.type.startsWith("image/")) {
-        // For image files (jpg, png)
-        reader.onload = (e) => {
-          setImageContent(e.target.result); // Set the image content (base64 string)
-        };
-        reader.readAsDataURL(file); // Read as base64
-      } else {
-        // For text files
-        reader.onload = (e) => {
-          setFileContent(e.target.result); // Set the file content to state
-        };
-        reader.readAsText(file); // Read as text
-      }
+    const file = event.target.files[0];
+    if (file && file.type.startsWith("image/")) {
+      setImageFile(file);
+      // Create preview URL for display
+      const previewURL = URL.createObjectURL(file);
+      setImagePreview(previewURL);
+    } else {
+      alert("Please upload a valid image file (e.g., jpg, png).");
     }
+  };
+
+  // Convert image file to required format for Gemini
+  const fileToGenerativePart = async (file) => {
+    const imageData = await file.arrayBuffer();
+    return {
+      inlineData: {
+        data: Buffer.from(imageData).toString('base64'),
+        mimeType: file.type
+      }
+    };
   };
 
   // Handle the submission to the AI model
   const handleSubmit = async () => {
-    if (!input && !fileContent && !imageContent) {
-      alert("Please provide input or upload a file.");
+    if (!imageFile) {
+      alert("Please upload an image file.");
       return;
     }
 
-    setIsLoading(true); // Show loading state
+    setIsLoading(true);
     try {
-      const chatSession = model.startChat({
-        generationConfig,
-        history: [],
-      });
+      // Convert image to required format
+      const imagePart = await fileToGenerativePart(imageFile);
 
-      // Combine input text, file content, and image content
-      let prompt = `${input}\n\nFile Content:\n${fileContent}`;
-      if (imageContent) {
-        // If an image is provided, append it as base64 encoded string
-        prompt += `\n\nImage Content:\n[Image Attached as Base64] ${imageContent}`;
-      }
-
-      // Send the combined prompt to the AI
-      const result = await chatSession.sendMessage(prompt);
-      setResponse(result.response.text()); // Display AI response
+      // Prepare prompt parts
+      const prompt = input || "What's in this image?";
+      const result = await model.generateContent([prompt, imagePart]);
+      const response = await result.response;
+      setResponse(response.text());
     } catch (error) {
       console.error("Error with AI:", error);
       setResponse("An error occurred. Please try again.");
     } finally {
-      setIsLoading(false); // Hide loading state
+      setIsLoading(false);
+      // Clean up preview URL
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
     }
   };
 
   return (
-    <div style={{ textAlign: "center", marginTop: "50px" }}>
-      <h1>Google AI DICOM Feedback</h1>
+    <div className="container my-5">
+      <h1 className="text-center mb-4">Gemini Vision Image Analysis</h1>
+      
+      <div className="mb-4">
+        <textarea
+          className="form-control"
+          placeholder="Enter your question about the image (optional)..."
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          rows="3"
+        ></textarea>
+      </div>
 
-      {/* Textarea for user input */}
-      <textarea
-        placeholder="Enter your input here..."
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        rows="6"
-        cols="50"
-        style={{ margin: "20px 0", padding: "10px", fontSize: "16px" }}
-      />
-      <br />
+      <div className="mb-3">
+        <input
+          type="file"
+          className="form-control"
+          accept="image/*"
+          onChange={handleFileUpload}
+        />
+      </div>
 
-      {/* File input for uploading a file */}
-      <input
-        type="file"
-        accept=".txt,.md,.json,image/*" // Accepting images as well
-        onChange={handleFileUpload}
-        style={{ marginBottom: "20px" }}
-      />
-      <br />
+      {imagePreview && (
+        <div className="mb-3 text-center">
+          <img 
+            src={imagePreview} 
+            alt="Preview" 
+            className="img-fluid" 
+            style={{ maxHeight: '300px' }}
+          />
+        </div>
+      )}
 
-      {/* Submit button */}
-      <button
-        onClick={handleSubmit}
-        style={{
-          padding: "10px 20px",
-          fontSize: "16px",
-          cursor: "pointer",
-          backgroundColor: "#007bff",
-          color: "#fff",
-          border: "none",
-          borderRadius: "5px",
-        }}
-        disabled={isLoading} // Disable button while loading
-      >
-        {isLoading ? "Processing..." : "Get Feedback"}
-      </button>
+      <div className="text-center">
+        <button
+          className="btn btn-primary"
+          onClick={handleSubmit}
+          disabled={isLoading || !imageFile}
+        >
+          {isLoading ? "Analyzing..." : "Analyze Image"}
+        </button>
+      </div>
 
-      {/* Display AI response */}
       {response && (
-        <div style={{ marginTop: "30px", border: "solid black 1px", padding: "10px" }}>
-          <h2>Response:</h2>
+        <div className="alert alert-info mt-4">
+          <h5>Analysis:</h5>
           <p>{response}</p>
         </div>
       )}
