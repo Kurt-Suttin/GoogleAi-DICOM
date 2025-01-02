@@ -80,7 +80,7 @@ function App() {
 
   return (
     <div className="container my-5">
-      <h1 className="text-center mb-4">Gemini Vision Image Analysis</h1>
+      <h1 className="text-center mb-4">Image Analysis</h1>
 
       <div className="mb-4">
         <label htmlFor="questionOptions" className="form-label text-muted">
